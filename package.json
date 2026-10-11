@@ -1,0 +1,10 @@
+{
+  "name": "yakob",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "dev": "cd server && npx -y wrangler@4.136.3 dev --port 8787",
+    "deploy": "cd server && npx -y wrangler@4.136.3 deploy"
+  }
+}
