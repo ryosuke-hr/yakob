@@ -2,8 +2,8 @@
 // 変わるたびに render() で DOM を全部描き直す。ルール判定は game.js を共有する。
 import { checkDiscard, takeableIndexes, handTotal, isJoker, CALL_LIMIT, MIN_PLAYERS, MAX_PLAYERS } from './game.js';
 
-// デプロイしたら wss://yakob.<アカウント>.workers.dev を入れる
-const PROD_SERVER = '';
+// Cloudflare に送ったサーバー（server/）の住所
+const PROD_SERVER = 'wss://yakob.ryosuke-hr.workers.dev';
 const IS_LOCAL = ['localhost', '127.0.0.1'].includes(location.hostname);
 const SERVER = IS_LOCAL ? 'ws://127.0.0.1:8787' : PROD_SERVER;
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 見間違えやすい I O 0 1 は使わない
@@ -58,8 +58,23 @@ function h(tag, props = {}, ...children) {
 
 const SUIT_MARK = { S: '♠', H: '♥', D: '♦', C: '♣' };
 const cardLabel = (c) => (isJoker(c) ? 'ジョーカー' : (c[0] === 'T' ? '10' : c[0]) + SUIT_MARK[c[1]]);
-const cardImg = (c, cls = '') => h('img', { class: `card ${cls}`, src: `cards/${c}.svg`, alt: cardLabel(c), draggable: 'false' });
-const backImg = (cls = '') => h('img', { class: `card ${cls}`, src: 'cards/1B.svg', alt: '' });
+// カードは画像を使わず CSS で描く（隅に数字とマーク、中央に大きなマーク。絵札は中央に文字）
+// マークの後ろの ︎ は、iPhone で絵文字にならないようにするため
+function cardEl(c, cls = '') {
+  if (isJoker(c)) {
+    return h('div', { class: `card joker ${cls}`, role: 'img', 'aria-label': cardLabel(c) },
+      h('span', { class: 'idx' }, 'JO', h('br'), 'KER'),
+      h('span', { class: 'pip' }, '★'));
+  }
+  const rank = c[0] === 'T' ? '10' : c[0];
+  const mark = SUIT_MARK[c[1]] + '︎';
+  const face = 'JQK'.includes(c[0]);
+  return h('div', { class: `card s${c[1]} ${cls}`, role: 'img', 'aria-label': cardLabel(c) },
+    h('span', { class: 'idx' }, rank, h('br'), mark),
+    h('span', { class: face ? 'pip face' : 'pip' }, face ? rank : mark),
+    face ? null : h('span', { class: 'idx idx2' }, rank, h('br'), mark));
+}
+const backEl = (cls = '') => h('div', { class: `card back ${cls}` });
 
 function fmtNum(n) {
   const r = Math.round(n * 100) / 100;
@@ -279,7 +294,7 @@ function renderTop() {
 
   return [
     h('div', { class: 'logo' }, 'ヤコブ'),
-    h('div', { class: 'logo-cards' }, cardImg('AS'), cardImg('1J'), cardImg('KH')),
+    h('div', { class: 'logo-cards' }, cardEl('AS'), cardEl('1J'), cardEl('KH')),
     h('div', { class: 'stack' },
       h('label', { class: 'muted' }, 'ニックネーム'),
       nameInput,
@@ -312,7 +327,7 @@ function seat(v, p, { showCards = false } = {}) {
     ),
     h('div', { class: 'row' },
       status,
-      showCards && p.cardCount ? h('span', { class: 'backs' }, Array.from({ length: p.cardCount }, () => h('img', { src: 'cards/1B.svg', alt: '' }))) : null,
+      showCards && p.cardCount ? h('span', { class: 'backs' }, Array.from({ length: p.cardCount }, () => h('span', { class: 'mini' }))) : null,
     ),
   );
 }
@@ -394,10 +409,10 @@ function renderGame(v) {
   else hint = '山札か、光っている捨て札をタップして引きます';
 
   const deck = h('button', { class: 'card-btn deck', onclick: () => move('deck'), disabled: !canDraw, 'aria-label': '山札から引く' },
-    backImg(), backImg(), backImg(canDraw ? 'takeable' : ''));
+    backEl(), backEl(), backEl(canDraw ? 'takeable' : ''));
   const top = h('div', { class: 'top-set' }, r.top.map((c, i) => {
     const takeable = canDraw && ends.includes(i);
-    return h('button', { class: 'card-btn', onclick: () => move(i), disabled: !takeable, 'aria-label': `${cardLabel(c)} を取る` }, cardImg(c, takeable ? 'takeable' : ''));
+    return h('button', { class: 'card-btn', onclick: () => move(i), disabled: !takeable, 'aria-label': `${cardLabel(c)} を取る` }, cardEl(c, takeable ? 'takeable' : ''));
   }));
 
   const total = hand ? handTotal(hand) : null;
@@ -417,7 +432,7 @@ function renderGame(v) {
       myTurn ? h('span', {}, 'あなたの番 ', h('span', { class: 'timer' })) : null,
     ) : null,
     hand ? h('div', { class: 'hand-info' }, h('span', { class: 'muted' }, '手札の合計'), h('span', { class: 'total' }, total)) : null,
-    hand ? h('div', { class: 'hand' }, hand.map((c) => h('button', { class: 'card-btn', onclick: () => toggle(c), 'aria-label': cardLabel(c) }, cardImg(c, app.selected.includes(c) ? 'selected' : '')))) : null,
+    hand ? h('div', { class: 'hand' }, hand.map((c) => h('button', { class: 'card-btn', onclick: () => toggle(c), 'aria-label': cardLabel(c) }, cardEl(c, app.selected.includes(c) ? 'selected' : '')))) : null,
     h('p', { class: 'hint' }, hint),
     myTurn && total <= CALL_LIMIT
       ? h('button', { class: 'primary yakob-btn', onclick: () => send({ t: 'yakob' }) }, 'ヤコブ！')
@@ -444,7 +459,7 @@ function renderReveal(v) {
           h('span', {}, `合計 ${res.totals[id]}`),
         ),
         h('div', { class: 'row spread' },
-          h('div', { class: 'reveal-cards' }, res.hands[id].map((c) => cardImg(c))),
+          h('div', { class: 'reveal-cards' }, res.hands[id].map((c) => cardEl(c))),
           h('div', { style: 'text-align:right' },
             h('div', { class: signClass(res.deltas[id]), style: 'font-size:20px;font-weight:700' }, fmtDelta(res.deltas[id])),
             p ? h('div', { class: 'muted' }, `累計 ${fmtScore(p.score)}`) : h('div', { class: 'muted' }, '退出しました'),

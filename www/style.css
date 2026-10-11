@@ -14,6 +14,13 @@
   --sheet-muted: #5f5e5a;
   --sheet-line: #e3e1d8;
   --card-w: 58px;
+  /* カードは白地のまま（ダークモードでも変えない） */
+  --suit-s: #2c2c2a;
+  --suit-h: #e24b4a;
+  --suit-d: #185fa5;
+  --suit-c: #3b6d11;
+  --suit-joker: #534ab7;
+  --card-back: repeating-linear-gradient(45deg, #993c1d 0 5px, #d85a30 5px 10px);
   color-scheme: light;
 }
 
@@ -86,9 +93,9 @@ input::placeholder { color: var(--felt-muted); }
 /* ---- トップ ---- */
 .logo { text-align: center; margin: 12vh 0 4px; font-size: 44px; font-weight: 700; letter-spacing: 0.1em; }
 .logo-cards { display: flex; justify-content: center; margin-bottom: 24px; }
-.logo-cards img { width: 54px; margin: 0 -10px; border-radius: 5px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3); }
-.logo-cards img:nth-child(1) { transform: rotate(-12deg) translateY(6px); }
-.logo-cards img:nth-child(3) { transform: rotate(12deg) translateY(6px); }
+.logo-cards .card { --card-w: 56px; margin: 0 -8px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3); }
+.logo-cards .card:nth-child(1) { transform: rotate(-12deg) translateY(6px); }
+.logo-cards .card:nth-child(3) { transform: rotate(12deg) translateY(6px); }
 .code-input { text-transform: uppercase; letter-spacing: 0.2em; }
 
 /* ---- プレイヤー ---- */
@@ -111,20 +118,38 @@ input::placeholder { color: var(--felt-muted); }
 .seat .status { font-size: 12px; color: var(--gold); }
 .seat.off .name { opacity: 0.55; }
 .backs { display: flex; }
-.backs img { width: 16px; margin-left: -6px; border-radius: 2px; }
+.backs .mini { width: 14px; height: 20px; margin-left: -5px; border-radius: 3px; border: 1px solid #fff; background: var(--card-back); }
 
 /* ---- カード ---- */
 .card {
+  position: relative;
   width: var(--card-w);
   aspect-ratio: 5 / 7;
-  border-radius: 6px;
+  border-radius: calc(var(--card-w) * 0.1);
   display: block;
   background: #fff;
+  border: 1px solid #d3d1c7;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: calc(var(--card-w) * 0.27);
+  font-weight: 600;
+  line-height: 1;
   transition: transform 0.12s;
   user-select: none;
   -webkit-user-drag: none;
 }
+.card .idx { position: absolute; top: 6%; left: 9%; text-align: center; }
+.card .idx2 { top: auto; left: auto; bottom: 6%; right: 9%; transform: rotate(180deg); }
+.card .pip { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 1.6em; }
+.card .pip.face { font-size: 1.9em; font-weight: 500; }
+.card.joker .idx { font-size: 0.6em; }
+.card.joker .pip { font-size: 1.7em; }
+.card.sS { color: var(--suit-s); }
+.card.sH { color: var(--suit-h); }
+.card.sD { color: var(--suit-d); }
+.card.sC { color: var(--suit-c); }
+.card.joker { color: var(--suit-joker); }
+.card.back { background: var(--card-back); border: 2px solid #fff; }
 button.card-btn { padding: 0; background: none; border-radius: 6px; }
 button.card-btn:disabled { opacity: 1; }
 .card.selected { transform: translateY(-14px); outline: 3px solid var(--gold); outline-offset: 1px; }
@@ -156,6 +181,7 @@ button.card-btn:disabled { opacity: 1; }
 .reveal-row.loser { outline: 2px solid var(--minus); }
 .reveal-cards { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
 .reveal-cards .card { --card-w: 40px; }
+.reveal-cards .card .idx2 { display: none; }
 
 /* ---- 得点表 ---- */
 .sheet-wrap { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: flex-end; justify-content: center; z-index: 10; }
