@@ -5,6 +5,9 @@
   --felt-muted: #9fe1cb;
   --panel: rgba(0, 0, 0, 0.18);
   --panel-light: rgba(255, 255, 255, 0.12);
+  --panel-strong: rgba(7, 58, 46, 0.92);
+  --panel-me: rgba(30, 110, 88, 0.95);
+  --rim: #7a4a26;
   --gold: #fac775;
   --gold-text: #633806;
   --plus: #c0dd97;
@@ -155,7 +158,57 @@ button.card-btn:disabled { opacity: 1; }
 .card.selected { transform: translateY(-14px); outline: 3px solid var(--gold); outline-offset: 1px; }
 .card.takeable { outline: 3px solid var(--gold); outline-offset: 1px; }
 
-.table { display: flex; justify-content: center; align-items: flex-end; gap: 28px; padding: 16px 0 8px; }
+/* ---- テーブル（円形の席） ---- */
+.ring { position: relative; height: 380px; }
+.ring-felt {
+  position: absolute;
+  inset: 34px 6px 44px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, #13856a 0%, var(--felt-dark) 80%);
+  border: 8px solid var(--rim);
+  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.35);
+}
+.ring-center {
+  --card-w: 50px;
+  position: absolute;
+  left: 50%;
+  top: 57%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: flex-end;
+  gap: 18px;
+}
+.rseat {
+  position: absolute;
+  min-width: 96px;
+  max-width: 120px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: var(--panel-strong);
+  text-align: center;
+  font-size: 13px;
+  outline: 2px solid transparent;
+  transition: outline-color 0.2s, box-shadow 0.2s;
+}
+.rseat.turn { outline-color: var(--gold); box-shadow: 0 0 0 5px rgba(250, 199, 117, 0.25); }
+.rseat.me { background: var(--panel-me); min-width: 150px; }
+.rseat.off .name { opacity: 0.55; }
+.rseat .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rseat .tag { font-size: 10px; padding: 1px 5px; border-radius: 6px; background: rgba(255, 255, 255, 0.18); margin-left: 4px; }
+.rseat .score { font-weight: 600; }
+.rseat .last { font-size: 11px; margin-left: 3px; opacity: 0.85; }
+.rseat .backs { justify-content: center; margin-top: 4px; padding-left: 5px; }
+.rseat .status { font-size: 12px; color: var(--gold); margin-top: 2px; }
+.pos-top { top: 0; left: 50%; transform: translateX(-50%); }
+.pos-left { top: 25%; left: 0; }
+.pos-right { top: 25%; right: 0; }
+.pos-upleft { top: 4%; left: 2%; }
+.pos-upright { top: 4%; right: 2%; }
+.pos-bottom { bottom: 0; left: 50%; transform: translateX(-50%); }
+
+/* 取った札が席へ運ばれるときの札（body 直下に置く） */
+.card.flying { position: fixed; z-index: 30; pointer-events: none; margin: 0; }
+.card.flying.taken { box-shadow: 0 0 0 3px var(--gold), 0 0 18px 6px rgba(250, 199, 117, 0.7); }
 .pile-label { text-align: center; font-size: 12px; margin-top: 6px; color: var(--felt-muted); }
 .deck { position: relative; width: var(--card-w); }
 .deck .card:not(:first-child) { position: absolute; left: 0; top: 0; }
@@ -171,7 +224,7 @@ button.card-btn:disabled { opacity: 1; }
 .yakob-btn { font-size: 22px; padding: 14px; letter-spacing: 0.1em; }
 .timer { font-variant-numeric: tabular-nums; font-weight: 700; }
 .timer.low { color: var(--minus); }
-.last-action { text-align: center; font-size: 12px; color: var(--felt-muted); min-height: 16px; }
+.last-action { text-align: center; font-size: 13px; color: var(--felt-text); min-height: 22px; padding: 2px 8px; border-radius: 8px; }
 
 /* ---- 公開 ---- */
 .banner { text-align: center; font-size: 26px; font-weight: 700; margin: 8px 0; }

@@ -130,8 +130,10 @@ function connect() {
       app.offset = msg.serverNow - Date.now();
       // 自分の番が終わったら選んでいた札を外す
       if (msg.state.round?.turnId !== app.view?.round?.turnId) app.selected = [];
+      const prev = app.view;
       app.view = msg.state;
       render();
+      animateLastAction(prev, msg.state);
     } else if (msg.t === 'error') {
       if (msg.code === 'rule') {
         toast(msg.message);
@@ -380,10 +382,36 @@ function describeLast(v) {
   return a.took ? `${who}: ${discarded} を捨てて、${cardLabel(a.took)} を取った` : `${who}: ${discarded} を捨てて、山札から引いた`;
 }
 
+// 自分を下にして、ほかのプレイヤーを時計回り（左 → 上 → 右）にテーブルのまわりへ並べる
+const RING_POSITIONS = { 1: ['top'], 2: ['upleft', 'upright'], 3: ['left', 'top', 'right'] };
+
+function ringSeat(v, p, pos) {
+  const r = v.round;
+  const isTurn = r.turnId === p.id;
+  const isMe = p.id === v.me;
+  let status = null;
+  if (!p.connected) status = '切断中';
+  else if (isTurn) status = [isMe ? 'あなたの番 ' : '考え中 ', h('span', { class: 'timer' })];
+  else if (p.cardCount === null) status = '次の局から参加';
+  const cls = ['rseat', `pos-${pos}`, isTurn && 'turn', isMe && 'me', !p.connected && 'off'].filter(Boolean).join(' ');
+
+  return h('div', { class: cls, 'data-pid': p.id },
+    h('div', { class: 'name' }, p.name, p.id === v.hostId ? h('span', { class: 'tag' }, '部屋主') : null),
+    h('div', {},
+      h('span', { class: `score ${signClass(p.score)}` }, fmtScore(p.score)),
+      p.last !== null ? h('span', { class: `last ${signClass(p.last)}` }, `(${fmtDelta(p.last)})`) : null,
+    ),
+    !isMe && p.cardCount ? h('div', { class: 'backs' }, Array.from({ length: p.cardCount }, () => h('span', { class: 'mini' }))) : null,
+    status ? h('div', { class: 'status' }, status) : null,
+  );
+}
+
 function renderGame(v) {
   const r = v.round;
-  const me = v.players.find((p) => p.id === v.me);
-  const others = v.players.filter((p) => p.id !== v.me);
+  const myIndex = v.players.findIndex((p) => p.id === v.me);
+  const me = v.players[myIndex];
+  const others = v.players.slice(myIndex + 1).concat(v.players.slice(0, myIndex));
+  const positions = RING_POSITIONS[others.length] || [];
   const myTurn = r.turnId === v.me;
   const hand = v.hand;
   const check = checkDiscard(app.selected);
@@ -418,19 +446,16 @@ function renderGame(v) {
   const total = hand ? handTotal(hand) : null;
   return [
     header(v),
-    h('div', { class: 'stack' }, others.map((p) => seat(v, p, { showCards: true }))),
-    h('div', { class: 'table' },
-      h('div', {}, deck, h('div', { class: 'pile-label' }, `山札 ${r.deckCount}`)),
-      h('div', {}, top, h('div', { class: 'pile-label' }, r.topBy ? `${v.names[r.topBy]} の捨て札` : '最初の捨て札')),
+    h('div', { class: 'ring' },
+      h('div', { class: 'ring-felt' }),
+      others.map((p, i) => ringSeat(v, p, positions[i])),
+      h('div', { class: 'ring-center' },
+        h('div', {}, deck, h('div', { class: 'pile-label' }, `山札 ${r.deckCount}`)),
+        h('div', {}, top, h('div', { class: 'pile-label' }, r.topBy ? `${v.names[r.topBy]} の捨て札` : '最初の捨て札')),
+      ),
+      me ? ringSeat(v, me, 'bottom') : null,
     ),
     h('div', { class: 'last-action' }, describeLast(v)),
-    me ? h('div', { class: `seat me ${myTurn ? 'turn' : ''}` },
-      h('div', {},
-        h('span', { class: 'name' }, me.name),
-        h('span', { class: `score ${signClass(me.score)}` }, fmtScore(me.score)),
-      ),
-      myTurn ? h('span', {}, 'あなたの番 ', h('span', { class: 'timer' })) : null,
-    ) : null,
     hand ? h('div', { class: 'hand-info' }, h('span', { class: 'muted' }, '手札の合計'), h('span', { class: 'total' }, total)) : null,
     hand ? h('div', { class: 'hand' }, hand.map((c) => h('button', { class: 'card-btn', onclick: () => toggle(c), 'aria-label': cardLabel(c) }, cardEl(c, app.selected.includes(c) ? 'selected' : '')))) : null,
     h('p', { class: 'hint' }, hint),
@@ -438,6 +463,68 @@ function renderGame(v) {
       ? h('button', { class: 'primary yakob-btn', onclick: () => send({ t: 'yakob' }) }, 'ヤコブ！')
       : null,
   ];
+}
+
+// ---- アニメーション ----
+// 手番が進んだら、捨てた札が席から捨て札へ、取った札が捨て札（山札）から席へ動く。
+// 何を取っていったか分かるよう、捨て札から取った札は持ち上げて光らせてから運ぶ。
+
+const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+const centerOf = (rect) => ({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+
+function animateLastAction(prev, next) {
+  const a = next.round?.lastAction;
+  if (!a || !prev?.round || prev.roundNum !== next.roundNum || reduceMotion()) return;
+  if (JSON.stringify(prev.round.lastAction) === JSON.stringify(a)) return;
+  const seatEl = root.querySelector(`.rseat[data-pid="${a.by}"]`);
+  const pileEl = root.querySelector('.top-set');
+  const deckEl = root.querySelector('.deck');
+  if (!seatEl || !pileEl || !deckEl) return;
+  const seat = centerOf(seatEl.getBoundingClientRect());
+
+  // 捨てた札: 席から飛んできて捨て札に重なる
+  for (const el of pileEl.querySelectorAll('.card')) {
+    const to = centerOf(el.getBoundingClientRect());
+    el.animate([
+      { transform: `translate(${seat.x - to.x}px, ${seat.y - to.y}px) scale(0.5)`, opacity: 0.4 },
+      { transform: 'none', opacity: 1 },
+    ], { duration: 450, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
+  }
+
+  // 取った札: 元の捨て札の端（または山札）から席へ
+  const pileRect = pileEl.getBoundingClientRect();
+  const cardW = pileEl.querySelector('.card').offsetWidth; // 飛んでくる途中の縮小を含めない大きさ
+  let from;
+  if (a.took) {
+    const fromLeft = prev.round.top[0] === a.took;
+    from = { x: fromLeft ? pileRect.left + cardW / 2 : pileRect.right - cardW / 2, y: pileRect.top + pileRect.height / 2 };
+  } else {
+    from = centerOf(deckEl.getBoundingClientRect());
+  }
+  const ghost = a.took ? cardEl(a.took, 'flying taken') : backEl('flying');
+  ghost.style.setProperty('--card-w', `${cardW}px`);
+  ghost.style.left = `${from.x - cardW / 2}px`;
+  ghost.style.top = `${from.y - (cardW * 7) / 10}px`;
+  document.body.append(ghost);
+  const dx = seat.x - from.x;
+  const dy = seat.y - from.y;
+  const frames = a.took
+    ? [
+      { transform: 'none', offset: 0 },
+      { transform: 'translateY(-14px) scale(1.25)', offset: 0.3 },
+      { transform: 'translateY(-14px) scale(1.25)', offset: 0.5 },
+      { transform: `translate(${dx}px, ${dy}px) scale(0.45)`, opacity: 0.6, offset: 1 },
+    ]
+    : [
+      { transform: 'none' },
+      { transform: `translate(${dx}px, ${dy}px) scale(0.45)`, opacity: 0.6 },
+    ];
+  const anim = ghost.animate(frames, { duration: a.took ? 1200 : 600, delay: 150, easing: 'ease-in-out', fill: 'both' });
+  anim.onfinish = () => ghost.remove();
+  anim.oncancel = () => ghost.remove();
+
+  const line = root.querySelector('.last-action');
+  line?.animate([{ backgroundColor: 'rgba(250, 199, 117, 0.35)' }, { backgroundColor: 'rgba(250, 199, 117, 0)' }], { duration: 1800 });
 }
 
 function renderReveal(v) {
